@@ -7,60 +7,59 @@ pip). Конечная цель работы — построить граф з�
 вывести его на языке PlantUML. Готовые менеджеры пакетов и библиотеки
 для получения зависимостей не используются.
 
-**Реализован этап 1**: консольное приложение, настройка через
-YAML-файл, проверка всех параметров.
+**Реализованы этапы 1–2**: настройка через YAML и получение прямых
+зависимостей пакета из репозитория.
 
 ## Параметры конфигурации (YAML)
 
 | Параметр       | Обязателен | Описание                                             |
 |----------------|------------|------------------------------------------------------|
 | `package_name` | да         | имя анализируемого пакета                            |
-| `repository`   | да         | URL репозитория или путь к файлу тестового репозитория |
+| `repository`   | да         | URL репозитория (корень JSON API, напр. `https://pypi.org/pypi`) или путь к файлу тестового репозитория |
 | `test_mode`    | нет        | `true` — `repository` это файл; по умолчанию `false`  |
 | `filter`       | нет        | подстрока для фильтрации пакетов; по умолчанию пусто  |
 
-Пример `config.yaml`:
+На этом этапе `test_mode: true` проверяется, но ещё не поддерживается.
 
-```yaml
-package_name: requests
-repository: https://pypi.org/pypi
-test_mode: false
-filter: ""
-```
+## Как собираются данные
 
-Ошибки проверяются для каждого параметра (пустое или некорректное имя,
-не-URL, отсутствующий файл тестового репозитория, неверный тип
-`test_mode` и `filter`, неизвестные параметры, повреждённый YAML,
-отсутствующий файл). Все найденные проблемы выводятся сразу, код
-возврата 1.
+1. Имя пакета приводится к каноническому виду (PEP 503).
+2. По адресу `<repository>/<имя>/json` скачивается описание пакета
+   (стандартный `urllib`, без pip).
+3. Из поля `requires_dist` берутся строки зависимостей (формат
+   `Requires-Dist`, PEP 508). Собственный разбор строки выделяет имя
+   пакета; версии игнорируются.
+4. Необязательные зависимости (`; extra == "..."`) пропускаются. Прочие
+   условия среды (`python_version`, `sys_platform`) не вычисляются:
+   такая зависимость считается прямой.
+
+Ошибки: пакет не найден (404), репозиторий недоступен, ответ не JSON,
+HTTP-ошибка, некорректная строка зависимости.
 
 ## Установка, запуск и тесты
 
-Нужен Python 3.8+.
+Нужен Python 3.8+ и интернет для запуска с реальным PyPI.
 
 ```
 pip install -r requirements.txt
-run.bat --config config.yaml
+run.bat --config configs\requests.yaml
 python -m unittest discover -v
-scripts\demo_stage1.bat
+scripts\demo_stage2.bat
 ```
 
-`--config PATH` — путь к YAML (по умолчанию `config.yaml`).
-`scripts\demo_stage1.bat` прогоняет корректные и некорректные
-конфигурации из папки `configs`.
+Тесты не требуют интернета: они поднимают локальный HTTP-сервер,
+имитирующий PyPI.
 
 ## Пример
 
 ```
-> run.bat --config configs\remote.yaml
-package_name: flask
-repository: https://pypi.org/pypi
-test_mode: false
-filter: werk
+> run.bat --config configs\requests.yaml
+Direct dependencies of requests (4):
+  charset-normalizer
+  idna
+  urllib3
+  certifi
 
-> run.bat --config configs\errors\all_wrong.yaml
-error: package_name: must not be empty
-error: repository: 'ftp://x' is not an http(s) URL (use test_mode: true ...)
-error: test_mode: must be true or false, got 5
-error: filter: must be a string, got [1]
+> run.bat --config configs\missing_package.yaml
+error: package not found: this-package-does-not-exist-xyz
 ```

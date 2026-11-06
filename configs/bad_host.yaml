@@ -1,0 +1,4 @@
+package_name: requests
+repository: https://pypi.invalid/pypi
+test_mode: false
+filter: ""

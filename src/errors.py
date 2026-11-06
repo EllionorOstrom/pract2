@@ -22,3 +22,11 @@ class ConfigError(ToolError):
     def problems(self):
         """Return all problems found in the configuration."""
         return self._problems
+
+
+class RepositoryError(ToolError):
+    """Package data cannot be obtained from the repository."""
+
+
+class PackageNotFoundError(RepositoryError):
+    """The repository does not contain the requested package."""

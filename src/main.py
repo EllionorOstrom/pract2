@@ -5,6 +5,7 @@ import sys
 
 from src.config import load_config
 from src.errors import ToolError
+from src.repository import PypiRepository
 
 EXIT_OK = 0
 EXIT_ERROR = 1
@@ -26,17 +27,14 @@ def parse_args(argv):
     return parser.parse_args(argv)
 
 
-def format_value(value):
-    """Format a parameter value for key-value output."""
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    return value or '""'
-
-
-def print_params(config):
-    """Print every user-configurable parameter as key: value."""
-    for key, value in config.as_pairs():
-        print(f"{key}: {format_value(value)}")
+def print_dependencies(package, names):
+    """Print the direct dependencies of a package."""
+    if not names:
+        print(f"{package} has no direct dependencies")
+        return
+    print(f"Direct dependencies of {package} ({len(names)}):")
+    for name in names:
+        print(f"  {name}")
 
 
 def report(error):
@@ -50,10 +48,14 @@ def main(argv=None):
     args = parse_args(argv)
     try:
         config = load_config(args.config)
+        if config.test_mode:
+            raise ToolError("test mode is not supported in this version")
+        repository = PypiRepository(config.repository)
+        package = repository.canonical_name(config.package_name)
+        print_dependencies(package, repository.dependencies(package))
     except ToolError as error:
         report(error)
         return EXIT_ERROR
-    print_params(config)
     return EXIT_OK
 
 
