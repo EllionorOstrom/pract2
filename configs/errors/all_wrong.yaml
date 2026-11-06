@@ -1,0 +1,4 @@
+package_name: ""
+repository: ftp://x
+test_mode: 5
+filter: [1]

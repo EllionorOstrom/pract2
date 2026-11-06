@@ -1,0 +1,5 @@
+# Test repository (format is described in the README from stage 3).
+A: B C
+B: D
+C: D
+D:

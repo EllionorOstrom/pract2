@@ -1,0 +1,3 @@
+package_name: A
+repository: examples/repos/missing.txt
+test_mode: true

@@ -1,0 +1,5 @@
+# Configuration of the dependency graph tool
+package_name: requests
+repository: https://pypi.org/pypi
+test_mode: false
+filter: ""
