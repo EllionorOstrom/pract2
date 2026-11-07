@@ -4,8 +4,10 @@ import os
 import tempfile
 import unittest
 
-from src.compare import (compare_orders, format_order_report,
-                         order_violations, parse_install_order, read_text)
+from src.compare import (compare_orders, format_graph_report,
+                         format_order_report, order_violations,
+                         parse_install_order, parse_pipdeptree, read_text,
+                         reachable)
 from src.errors import CompareError
 
 PIP_OUTPUT = (
@@ -75,6 +77,54 @@ class CompareTests(unittest.TestCase):
             self.assertEqual(read_text(path), "hello")
             with self.assertRaises(CompareError):
                 read_text(os.path.join(folder, "none.txt"))
+
+
+TREE_JSON = """[
+ {"package": {"key": "requests", "package_name": "requests"},
+  "dependencies": [{"key": "idna"}, {"key": "charset-normalizer"}]},
+ {"package": {"key": "idna"}, "dependencies": []},
+ {"package": {"key": "charset-normalizer"}, "dependencies": []},
+ {"package": {"key": "other"}, "dependencies": [{"key": "idna"}]}
+]"""
+
+
+class GraphCompareTests(unittest.TestCase):
+    """Stage 5: comparison with pipdeptree."""
+
+    def test_parse_pipdeptree(self):
+        """The flat JSON becomes an adjacency dict."""
+        graph = parse_pipdeptree(TREE_JSON)
+        self.assertEqual(graph["requests"], ["idna", "charset-normalizer"])
+
+    def test_parse_pipdeptree_errors(self):
+        """Broken JSON and wrong structure are errors."""
+        for text in ("{bad", '{"a": 1}', "[1]"):
+            with self.subTest(text=text):
+                with self.assertRaises(CompareError):
+                    parse_pipdeptree(text)
+
+    def test_reachable(self):
+        """Only packages reachable from the root are kept."""
+        graph = parse_pipdeptree(TREE_JSON)
+        self.assertNotIn("other", reachable(graph, "requests"))
+        self.assertEqual(len(reachable(graph, "requests")), 3)
+
+    def test_identical_graphs(self):
+        """Equal graphs have no differences."""
+        graph = {"a": ["b"], "b": []}
+        text = "\n".join(format_graph_report(graph, graph))
+        self.assertIn("Only in our graph: -", text)
+        self.assertIn("Dependencies only in pipdeptree: -", text)
+
+    def test_differences(self):
+        """Extra packages and links are listed."""
+        ours = {"a": ["b", "c"], "b": [], "c": []}
+        theirs = {"a": ["b"], "b": ["d"], "d": []}
+        text = "\n".join(format_graph_report(ours, theirs))
+        self.assertIn("Only in our graph: c", text)
+        self.assertIn("Only in pipdeptree: d", text)
+        self.assertIn("only in our graph: a->c", text)
+        self.assertIn("only in pipdeptree: b->d", text)
 
 
 if __name__ == "__main__":

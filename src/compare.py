@@ -1,18 +1,21 @@
 """Comparison of the results with the real package manager (pip).
 
 The package is installed by pip into a temporary virtual
-environment; the order printed by pip ("Installing collected
-packages: ...") is compared with the load order of this tool.
+environment. The order printed by pip ("Installing collected
+packages: ...") is compared with the load order of this tool, and
+the graph reported by pipdeptree is compared with our graph.
 """
 
 import argparse
 import contextlib
+import json
 import os
 import re
 import subprocess
 import sys
 import tempfile
 import venv
+from collections import deque
 from dataclasses import dataclass
 
 from src.config import load_config
@@ -146,27 +149,107 @@ def pip_install_output(package, saved):
         )
 
 
+def parse_pipdeptree(text):
+    """Convert the JSON of ``pipdeptree --json`` to {name: [deps]}."""
+    try:
+        graph = {}
+        for item in json.loads(text):
+            name = normalize(item["package"]["key"])
+            graph[name] = [normalize(dep["key"])
+                           for dep in item["dependencies"]]
+    except (ValueError, KeyError, TypeError):
+        raise CompareError("unexpected pipdeptree JSON format") from None
+    return graph
+
+
+def reachable(graph, root):
+    """Return the part of the graph reachable from ``root`` (BFS)."""
+    result = {}
+    queue = deque([root])
+    while queue:
+        name = queue.popleft()
+        if name in result:
+            continue
+        result[name] = graph.get(name, [])
+        queue.extend(result[name])
+    return result
+
+
+def edge_set(graph):
+    """Return the set of (package, dependency) pairs of a graph."""
+    return {(name, dep) for name, deps in graph.items() for dep in deps}
+
+
+def format_graph_report(ours, other):
+    """Compare our graph with the pipdeptree graph, as text lines."""
+    our_edges, other_edges = edge_set(ours), edge_set(other)
+    only_ours = sorted(set(ours) - set(other))
+    only_other = sorted(set(other) - set(ours))
+    lines = [
+        f"Packages: ours {len(ours)}, pipdeptree {len(other)}",
+        "Only in our graph: " + (", ".join(only_ours) or "-"),
+        "Only in pipdeptree: " + (", ".join(only_other) or "-"),
+        f"Dependencies: ours {len(our_edges)}, "
+        f"pipdeptree {len(other_edges)}",
+    ]
+    for title, edges in (("our graph", our_edges - other_edges),
+                         ("pipdeptree", other_edges - our_edges)):
+        text = ", ".join(f"{a}->{b}" for a, b in sorted(edges)) or "-"
+        lines.append(f"Dependencies only in {title}: {text}")
+    return lines
+
+
+def pipdeptree_output(package, saved):
+    """Return the JSON of pipdeptree (saved or fresh)."""
+    if saved:
+        return read_text(saved)
+    with sandbox() as python:
+        run_module(python, "pip", "install", "--no-input",
+                   "--disable-pip-version-check", package)
+        run_module(python, "pip", "install", "--no-input",
+                   "--disable-pip-version-check", "pipdeptree")
+        return run_module(python, "pipdeptree", "--json", "-p", package)
+
+
 def parse_args(argv):
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
         prog="compare",
-        description="Compare the load order with the output of pip.",
+        description="Compare our results with pip and pipdeptree.",
     )
     parser.add_argument("--config", default=DEFAULT_CONFIG, metavar="PATH")
     parser.add_argument(
+        "--what", choices=("order", "graph"), default="order",
+        help="order: compare with pip; graph: compare with pipdeptree",
+    )
+    parser.add_argument(
         "--saved", metavar="FILE",
-        help="text saved from 'pip install' instead of running pip",
+        help="text saved from the real tool instead of running it",
     )
     return parser.parse_args(argv)
 
 
-def compare_order(config, saved):
-    """Build our order for the configured package and compare it."""
+def build_our_graph(config):
+    """Build our graph for a configuration with a real repository."""
     if config.test_mode:
         raise CompareError("comparison needs a real repository")
     repository = PypiRepository(config.repository)
     root = repository.canonical_name(config.package_name)
     graph = build_graph(root, repository, config.substring, warn)
+    return root, graph
+
+
+def compare_graph(config, saved):
+    """Compare our graph with the one reported by pipdeptree."""
+    root, graph = build_our_graph(config)
+    theirs = parse_pipdeptree(pipdeptree_output(root, saved))
+    for line in format_graph_report(graph, reachable(theirs, root)):
+        print(line)
+
+
+def compare_order(config, saved):
+    """Build our order for the configured package and compare it."""
+    root, graph = build_our_graph(config)
     ours = load_order(graph, root)
     pip_order = parse_install_order(pip_install_output(root, saved))
     result = compare_orders(ours, pip_order, graph)
@@ -178,7 +261,11 @@ def main(argv=None):
     """Run the comparison and return the process exit code."""
     args = parse_args(argv)
     try:
-        compare_order(load_config(args.config), args.saved)
+        config = load_config(args.config)
+        if args.what == "graph":
+            compare_graph(config, args.saved)
+        else:
+            compare_order(config, args.saved)
     except ToolError as error:
         report(error)
         return EXIT_ERROR

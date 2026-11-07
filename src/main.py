@@ -7,12 +7,13 @@ from src.config import load_config
 from src.errors import ToolError
 from src.graph import build_graph, count_edges, find_cycles, format_graph
 from src.order import format_order, load_order
+from src.plantuml import to_plantuml
 from src.repository import PypiRepository, TestRepository
 
 EXIT_OK = 0
 EXIT_ERROR = 1
 DEFAULT_CONFIG = "config.yaml"
-MODES = ("graph", "order")
+MODES = ("graph", "order", "plantuml")
 
 
 def parse_args(argv):
@@ -32,7 +33,13 @@ def parse_args(argv):
         choices=MODES,
         default="graph",
         help="graph: dependency graph (default); "
-        "order: load order of dependencies",
+        "order: load order of dependencies; "
+        "plantuml: diagram in PlantUML language",
+    )
+    parser.add_argument(
+        "--output",
+        metavar="PATH",
+        help="also save the PlantUML text to this file (UTF-8)",
     )
     return parser.parse_args(argv)
 
@@ -84,13 +91,27 @@ def print_order(root, graph):
             print("  " + " -> ".join(cycle))
 
 
-def run(config, mode="graph"):
+def print_plantuml(root, graph, output=None):
+    """Print the PlantUML diagram and optionally save it to a file."""
+    text = "\n".join(to_plantuml(root, graph))
+    print(text)
+    if output:
+        try:
+            with open(output, "w", encoding="utf-8") as file:
+                file.write(text + "\n")
+        except OSError as error:
+            raise ToolError(f"cannot write {output}: {error}") from None
+
+
+def run(config, mode="graph", output=None):
     """Build the dependency graph and print it in the chosen mode."""
     repository = open_repository(config)
     root = repository.canonical_name(config.package_name)
     graph = build_graph(root, repository, config.substring, warn)
     if mode == "order":
         print_order(root, graph)
+    elif mode == "plantuml":
+        print_plantuml(root, graph, output)
     else:
         print_graph(root, graph, config)
 
@@ -99,7 +120,7 @@ def main(argv=None):
     """Run the tool and return the process exit code."""
     args = parse_args(argv)
     try:
-        run(load_config(args.config), args.mode)
+        run(load_config(args.config), args.mode, args.output)
     except ToolError as error:
         report(error)
         return EXIT_ERROR

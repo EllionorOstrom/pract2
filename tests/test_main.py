@@ -2,6 +2,8 @@
 
 import contextlib
 import io
+import os
+import tempfile
 import unittest
 
 from src.main import EXIT_ERROR, EXIT_OK, main
@@ -79,6 +81,38 @@ class MainTests(unittest.TestCase):
         """Stage 4: errors work in order mode too."""
         code, _, _ = self.run_main("configs/test_missing_root.yaml", "order")
         self.assertEqual(code, EXIT_ERROR)
+
+    def test_plantuml_mode(self):
+        """Stage 5: PlantUML text is printed."""
+        code, out, _ = self.run_main("configs/test_simple.yaml", "plantuml")
+        self.assertEqual(code, EXIT_OK)
+        self.assertTrue(out.startswith("@startuml\n"))
+        self.assertTrue(out.endswith("@enduml\n"))
+        self.assertIn("n0 --> n1", out)
+
+    def test_plantuml_output_file(self):
+        """Stage 5: --output saves the same text to a file."""
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "g.puml")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = main(["--config", "configs/test_chain.yaml",
+                             "--mode", "plantuml", "--output", path])
+            with open(path, encoding="utf-8") as file:
+                saved = file.read()
+        self.assertEqual(code, EXIT_OK)
+        self.assertEqual(saved, out.getvalue())
+
+    def test_plantuml_output_error(self):
+        """Stage 5: an unwritable file is an error."""
+        err = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()):
+            with contextlib.redirect_stderr(err):
+                code = main(["--config", "configs/test_chain.yaml",
+                             "--mode", "plantuml",
+                             "--output", "no_such_dir/g.puml"])
+        self.assertEqual(code, EXIT_ERROR)
+        self.assertIn("cannot write", err.getvalue())
 
 
 if __name__ == "__main__":

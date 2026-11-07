@@ -1,0 +1,12 @@
+@startuml
+title Dependency graph of APP
+rectangle "APP" as n0 #LightBlue
+rectangle "LIB" as n1
+rectangle "TOOLS" as n2
+rectangle "CORE" as n3
+n0 --> n1
+n0 --> n2
+n1 --> n3
+n2 --> n3
+n2 --> n1
+@enduml

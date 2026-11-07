@@ -1,0 +1,4 @@
+package_name: jinja2
+repository: https://pypi.org/pypi
+test_mode: false
+filter: ""
