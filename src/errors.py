@@ -34,3 +34,7 @@ class PackageNotFoundError(RepositoryError):
 
 class GraphError(ToolError):
     """The dependency graph cannot be built."""
+
+
+class CompareError(ToolError):
+    """Comparison with the real package manager failed."""

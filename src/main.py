@@ -6,11 +6,13 @@ import sys
 from src.config import load_config
 from src.errors import ToolError
 from src.graph import build_graph, count_edges, find_cycles, format_graph
+from src.order import format_order, load_order
 from src.repository import PypiRepository, TestRepository
 
 EXIT_OK = 0
 EXIT_ERROR = 1
 DEFAULT_CONFIG = "config.yaml"
+MODES = ("graph", "order")
 
 
 def parse_args(argv):
@@ -24,6 +26,13 @@ def parse_args(argv):
         default=DEFAULT_CONFIG,
         metavar="PATH",
         help=f"path to the YAML configuration (default: {DEFAULT_CONFIG})",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=MODES,
+        default="graph",
+        help="graph: dependency graph (default); "
+        "order: load order of dependencies",
     )
     return parser.parse_args(argv)
 
@@ -63,19 +72,34 @@ def print_graph(root, graph, config):
         print("  " + " -> ".join(cycle))
 
 
-def run(config):
-    """Build and print the dependency graph for a configuration."""
+def print_order(root, graph):
+    """Print the load order and mention cyclic dependencies."""
+    order = load_order(graph, root)
+    for line in format_order(root, order):
+        print(line)
+    cycles = find_cycles(graph)
+    if cycles:
+        print("Note: cyclic dependencies found, their order is arbitrary:")
+        for cycle in cycles:
+            print("  " + " -> ".join(cycle))
+
+
+def run(config, mode="graph"):
+    """Build the dependency graph and print it in the chosen mode."""
     repository = open_repository(config)
     root = repository.canonical_name(config.package_name)
     graph = build_graph(root, repository, config.substring, warn)
-    print_graph(root, graph, config)
+    if mode == "order":
+        print_order(root, graph)
+    else:
+        print_graph(root, graph, config)
 
 
 def main(argv=None):
     """Run the tool and return the process exit code."""
     args = parse_args(argv)
     try:
-        run(load_config(args.config))
+        run(load_config(args.config), args.mode)
     except ToolError as error:
         report(error)
         return EXIT_ERROR

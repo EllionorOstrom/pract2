@@ -10,12 +10,12 @@ from src.main import EXIT_ERROR, EXIT_OK, main
 class MainTests(unittest.TestCase):
     """Stage 3: whole program in test mode."""
 
-    def run_main(self, path):
+    def run_main(self, path, mode="graph"):
         """Run main and return (code, stdout, stderr)."""
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out):
             with contextlib.redirect_stderr(err):
-                code = main(["--config", path])
+                code = main(["--config", path, "--mode", mode])
         return code, out.getvalue(), err.getvalue()
 
     def test_simple_graph(self):
@@ -62,6 +62,23 @@ class MainTests(unittest.TestCase):
                 code, _, err = self.run_main(f"configs/test_{name}.yaml")
                 self.assertEqual(code, EXIT_ERROR)
                 self.assertTrue(err.startswith("error: "))
+
+    def test_order_mode(self):
+        """Stage 4: the diamond is printed in load order."""
+        code, out, _ = self.run_main("configs/test_simple.yaml", "order")
+        self.assertEqual(code, EXIT_OK)
+        self.assertIn("  1. D\n  2. B\n  3. C\n  4. A\n", out)
+
+    def test_order_mode_with_cycle(self):
+        """Stage 4: a cycle is mentioned and does not hang."""
+        code, out, _ = self.run_main("configs/test_cyclic.yaml", "order")
+        self.assertEqual(code, EXIT_OK)
+        self.assertIn("cyclic dependencies found", out)
+
+    def test_order_mode_error(self):
+        """Stage 4: errors work in order mode too."""
+        code, _, _ = self.run_main("configs/test_missing_root.yaml", "order")
+        self.assertEqual(code, EXIT_ERROR)
 
 
 if __name__ == "__main__":
