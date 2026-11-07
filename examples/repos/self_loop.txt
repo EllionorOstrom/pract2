@@ -1,0 +1,4 @@
+# A package that depends on itself, and a second cycle
+A: A B
+B: C
+C: B

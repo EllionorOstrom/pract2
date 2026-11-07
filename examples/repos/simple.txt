@@ -1,4 +1,4 @@
-# Test repository (format is described in the README from stage 3).
+# Diamond: D is reached through B and through C
 A: B C
 B: D
 C: D

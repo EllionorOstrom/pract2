@@ -1,0 +1,4 @@
+package_name: A
+repository: examples/repos/cyclic.txt
+test_mode: true
+filter: ""

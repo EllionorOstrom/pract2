@@ -1,0 +1,4 @@
+package_name: A
+repository: examples/repos/self_loop.txt
+test_mode: true
+filter: ""

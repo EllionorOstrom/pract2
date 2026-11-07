@@ -30,3 +30,7 @@ class RepositoryError(ToolError):
 
 class PackageNotFoundError(RepositoryError):
     """The repository does not contain the requested package."""
+
+
+class GraphError(ToolError):
+    """The dependency graph cannot be built."""

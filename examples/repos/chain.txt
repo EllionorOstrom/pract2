@@ -1,0 +1,6 @@
+# A long chain without branches
+A: B
+B: C
+C: D
+D: E
+E:

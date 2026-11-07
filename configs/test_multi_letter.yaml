@@ -1,0 +1,4 @@
+package_name: APP
+repository: examples/repos/multi_letter.txt
+test_mode: true
+filter: ""

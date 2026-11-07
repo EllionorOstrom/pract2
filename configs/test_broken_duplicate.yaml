@@ -1,0 +1,4 @@
+package_name: A
+repository: examples/repos/broken_duplicate.txt
+test_mode: true
+filter: ""

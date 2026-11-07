@@ -1,0 +1,4 @@
+package_name: A
+repository: examples/repos/chain.txt
+test_mode: true
+filter: ""

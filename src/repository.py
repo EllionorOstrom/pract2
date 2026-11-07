@@ -1,6 +1,7 @@
 """Access to package repositories."""
 
 import json
+import re
 import urllib.error
 import urllib.request
 from urllib.parse import quote
@@ -11,6 +12,7 @@ from src.requirement import normalize, parse_requirement
 TIMEOUT_SECONDS = 15
 HTTP_NOT_FOUND = 404
 USER_AGENT = "depgraph-study-tool/1.0"
+TEST_NAME_PATTERN = re.compile(r"^[A-Z]+$")
 
 
 class PypiRepository:
@@ -81,3 +83,70 @@ def _http_error(error, package, url):
     if error.code == HTTP_NOT_FOUND:
         return PackageNotFoundError(f"package not found: {package}")
     return RepositoryError(f"{url}: HTTP error {error.code}")
+
+
+class TestRepository:
+    """Repository described by a text file.
+
+    Every line has the form ``NAME: DEP DEP ...``; names are
+    uppercase Latin letters. Text after ``#`` is a comment.
+    """
+
+    def __init__(self, graph):
+        """Create a repository from a {name: [dependencies]} dict."""
+        self.graph = graph
+
+    @classmethod
+    def from_file(cls, path):
+        """Read a test repository file."""
+        try:
+            with open(path, encoding="utf-8-sig") as file:
+                text = file.read()
+        except (OSError, UnicodeDecodeError) as error:
+            raise RepositoryError(f"cannot read {path}: {error}") from None
+        return cls(parse_test_repository(text, path))
+
+    @staticmethod
+    def canonical_name(name):
+        """Names of the test repository are used as they are."""
+        return name
+
+    def dependencies(self, package):
+        """Return the direct dependencies of a package."""
+        if package not in self.graph:
+            raise PackageNotFoundError(f"package not found: {package}")
+        return list(self.graph[package])
+
+
+def parse_test_repository(text, source):
+    """Parse the text of a test repository into a dict."""
+    graph = {}
+    for number, line in enumerate(text.splitlines(), start=1):
+        content = line.split("#", 1)[0].strip()
+        if not content:
+            continue
+        where = f"{source}:{number}"
+        name, deps = _parse_line(content, where)
+        if name in graph:
+            raise RepositoryError(f"{where}: package {name} is defined twice")
+        graph[name] = deps
+    return graph
+
+
+def _parse_line(content, where):
+    """Parse one line ``NAME: DEP DEP`` and check the names."""
+    name, separator, rest = content.partition(":")
+    if not separator:
+        raise RepositoryError(f"{where}: expected 'NAME: DEP DEP ...'")
+    name = name.strip()
+    deps = []
+    for dep in rest.split():
+        if dep not in deps:
+            deps.append(dep)
+    for item in [name] + deps:
+        if not TEST_NAME_PATTERN.match(item):
+            raise RepositoryError(
+                f"{where}: invalid package name {item!r} "
+                "(only uppercase Latin letters are allowed)"
+            )
+    return name, deps

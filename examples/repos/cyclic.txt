@@ -1,0 +1,5 @@
+# Cycle A -> B -> C -> A, D hangs off C
+A: B
+B: C
+C: A D
+D:

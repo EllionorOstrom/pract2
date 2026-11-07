@@ -1,0 +1,5 @@
+# Names may have several letters
+APP: LIB TOOLS
+LIB: CORE
+TOOLS: CORE LIB
+CORE:

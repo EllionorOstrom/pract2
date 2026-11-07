@@ -1,0 +1,4 @@
+package_name: B
+repository: examples/repos/chain.txt
+test_mode: true
+filter: "d"
