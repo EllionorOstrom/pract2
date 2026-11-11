@@ -97,14 +97,15 @@ class ValidationTests(unittest.TestCase):
 class FileTests(unittest.TestCase):
     """Reading the YAML file."""
 
-    def setUp(self):
-        """Create a temporary folder."""
-        self.folder = tempfile.TemporaryDirectory()
-        self.addCleanup(self.folder.cleanup)
+    def make_folder(self):
+        """Create a temporary folder that is removed after the test."""
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        return folder.name
 
     def write(self, text):
         """Write a config file and return its path."""
-        path = os.path.join(self.folder.name, "c.yaml")
+        path = os.path.join(self.make_folder(), "c.yaml")
         with open(path, "w", encoding="utf-8") as file:
             file.write(text)
         return path
@@ -116,8 +117,9 @@ class FileTests(unittest.TestCase):
 
     def test_missing_file(self):
         """A missing file is reported."""
+        path = os.path.join(self.make_folder(), "none.yaml")
         with self.assertRaises(ConfigError) as context:
-            load_config(os.path.join(self.folder.name, "none.yaml"))
+            load_config(path)
         self.assertIn("not found", context.exception.problems[0])
 
     def test_broken_yaml(self):
